@@ -1,21 +1,21 @@
 // main.js — MathOMeter FULL (6 run x 20 trial)
 // PTB-LIKE TIMING + PTB-IDENTICAL PARAMS + PTB-IDENTICAL RUN FILE NAMING
 //
-// Struttura (come richiesto):
-//   1) SubjectNumber (tastiera + INVIO)
+// Structure (as requested):
+//   1) SubjectNumber (keyboard + ENTER)
 //   2) Loader (JSON + preload demo)
-//   3) Screen “Subject/Run” (tap ovunque OPPURE qualsiasi tasto)  ✅ (conferma)
-//   4) Screen “Ready” (tap ovunque OPPURE qualsiasi tasto)        ✅ TTL anchor = QUI (per-run)
+//   3) Screen “Sujet/Run” (tap anywhere OR any key)   ✅ (confirmation)
+//   4) Screen “Prêt” (tap anywhere OR any key)        ✅ TTL anchor = HERE (per-run)
 //   5) Trials
-//   6) A ogni run successiva: di nuovo (3) conferma run + (4) ready (TTLonset per-run)
+//   6) For each next run: again (3) confirm run + (4) ready (TTLonset per-run)
 //
 // Response:
-//   - Touch: metà schermo sx/dx
-//   - Tastiera: y=left, b=right
+//   - Touch: left/right half of screen
+//   - Keyboard: y=left, b=right
 //
-// Salvataggio:
-//   - params (PTB-like): mathometer_subjXX_params.json (1 volta all'inizio, opzionale anche ad ogni run)
-//   - run data:          mathometer_subjXX_run_1..6.json  (runIndex = ordine di esecuzione, come PTB runs(i))
+// Saving:
+//   - params (PTB-like): mathometer_subjXX_params.json (once at start, optional each run)
+//   - run data:          mathometer_subjXX_run_1..6.json  (runIndex = execution order, like PTB runs(i))
 //
 // PTB-like timing/log:
 // questions.onsets(trial,:) = [beepFlip, sentenceStart, respFlip, feedbackStart, restFlipStart, restFlipEnd]
@@ -25,14 +25,14 @@
 // =========================
 // ⚠️ IMPORTANT: index.html
 // =========================
-// Assicurati di includere anche:
+// Make sure to include:
 // <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.3"></script>
 //
 // =========================
 // CONFIG
 // =========================
-const DOWNLOAD_PARAMS_AT_START = true;      // scarica mathometer_subjXX_params.json all'inizio
-const DOWNLOAD_PARAMS_EACH_RUN = false;     // se true, scarica anche un params "snapshot" dopo ogni run (non sovrascrivibile)
+const DOWNLOAD_PARAMS_AT_START = true;      // download mathometer_subjXX_params.json at start
+const DOWNLOAD_PARAMS_EACH_RUN = false;     // if true, also download a params snapshot after each run
 
 // =========================
 // GLOBALS / CONSTANTS
@@ -55,9 +55,9 @@ const TOTAL_RUNS = 6;
 const NUM_SENTENCES = 20;
 
 // ====== PTB-LIKE STATE ======
-let MMO_TTL_T0_MS = null;
+let MMO_TTL_T0_MS = null;     // per-run anchor (set on READY screen)
 let MMO_TRIAL_I = 0;          // debug
-let MMO_RUN_QUESTIONS = null; // buffer run corrente
+let MMO_RUN_QUESTIONS = null; // buffer current run
 
 // Response capture state (PTB-like "KbQueue firstPress")
 let MMO_WAIT_START_MS = null;
@@ -100,7 +100,7 @@ function anyToSide(x) {
   return keyToSide(x);
 }
 
-// trueSide: 1 TRUE a destra (b / tap-right), 2 TRUE a sinistra (y / tap-left)
+// trueSide: 1 TRUE right (b / tap-right), 2 TRUE left (y / tap-left)
 function anyToTrueFalse(x, trueSide) {
   const side = anyToSide(x);
   if (!side) return "NA";
@@ -141,7 +141,7 @@ function fixationHTML() {
 // ====== UTILS ======
 async function loadJSON(path) {
   const resp = await fetch(path);
-  if (!resp.ok) throw new Error(`Errore caricando ${path}: ${resp.status}`);
+  if (!resp.ok) throw new Error(`Erreur en chargeant ${path} : ${resp.status}`);
   return await resp.json();
 }
 
@@ -211,7 +211,7 @@ function updateLastRunCompleted(subjectNumber, lastRunCompleted) {
 /* =========================
    ✅ FULLSCREEN TAP SCREEN
    ========================= */
-function fullScreenButtonHTML(ariaLabel = "Continue") {
+function fullScreenButtonHTML(ariaLabel = "Continuer") {
   return `
     <button style="
       position:fixed; inset:0;
@@ -228,20 +228,20 @@ function fullScreenButtonHTML(ariaLabel = "Continue") {
    ✅ RUN CONFIRM + READY (TTLonset PER-RUN)
    ========================= */
 function pushRunConfirmAndReady(tl, runIndex, runNumber, jsPsych) {
-  // (1) Conferma run (tap anywhere OR any key)
+  // (1) Confirmation run (tap anywhere OR any key)
   tl.push({
     type: jsPsychHtmlButtonResponse,
     stimulus: `
       <div class="mmo-form">
         <h1>MathOMeter</h1>
-        <p>Subject: <b>${subjStr2(window.MMO_SUBJECT_NUMBER)}</b></p>
-        <p>Stai per iniziare: <b>Run ${runIndex}</b></p>
-        <p style="font-size:14px; opacity:0.8;">(orig runNumber: ${runNumber})</p>
-        <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per continuare</p>
+        <p>Sujet : <b>${subjStr2(window.MMO_SUBJECT_NUMBER)}</b></p>
+        <p>Vous allez commencer : <b>Run ${runIndex}</b></p>
+        <p style="font-size:14px; opacity:0.8;">(run originale : ${runNumber})</p>
+        <p style="margin-top:18px;">Touchez l’écran (ou appuyez sur une touche) pour continuer</p>
       </div>
     `,
     choices: [" "],
-    button_html: fullScreenButtonHTML("Continue"),
+    button_html: fullScreenButtonHTML("Continuer"),
     data: { phase: "run_confirm", runIndex, runNumber },
 
     on_load: function () {
@@ -269,12 +269,12 @@ function pushRunConfirmAndReady(tl, runIndex, runNumber, jsPsych) {
     stimulus: `
       <div class="mmo-form">
         <h1>MathOMeter</h1>
-        <p>Tocca un qualunque punto dello schermo quando sei pronto</p>
-        <p style="font-size:14px; opacity:0.8;">(oppure premi un tasto)</p>
+        <p>Touchez l’écran lorsque vous êtes prêt</p>
+        <p style="font-size:14px; opacity:0.8;">(ou appuyez sur une touche)</p>
       </div>
     `,
     choices: [" "],
-    button_html: fullScreenButtonHTML("Ready"),
+    button_html: fullScreenButtonHTML("Prêt"),
     data: { phase: "ready_ttl_anchor", runIndex, runNumber },
 
     on_load: function () {
@@ -297,7 +297,7 @@ function pushRunConfirmAndReady(tl, runIndex, runNumber, jsPsych) {
       // ✅ TTL anchor PER-RUN
       MMO_TTL_T0_MS = performance.now();
 
-      // reset buffer run
+      // reset buffer for this run
       MMO_RUN_QUESTIONS = null;
     }
   });
@@ -307,7 +307,7 @@ function pushRunConfirmAndReady(tl, runIndex, runNumber, jsPsych) {
 function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
   const N_CHARACTERS = CHARACTER_IDS.length;
 
-  // 1) run_order persistente
+  // 1) persistent run_order
   let saved = loadSubjectParams(subjectNumber);
   let runOrder;
   let lastRunCompleted = 0;
@@ -326,24 +326,24 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
   const runs = [];
 
   for (let i = 0; i < TOTAL_RUNS; i++) {
-    const runIndex = i + 1;        // ordine esecuzione 1..6
-    const runNumber = runOrder[i]; // run originale 1..6
+    const runIndex = i + 1;        // execution order 1..6
+    const runNumber = runOrder[i]; // original run 1..6
 
     // sentences: select by runNumber, shuffle, take 20
     const sentencesThisRun = allSentences.filter(s => Number(s.run) === Number(runNumber));
     if (sentencesThisRun.length < NUM_SENTENCES) {
-      throw new Error(`Run ${runNumber}: trovate ${sentencesThisRun.length} frasi (< ${NUM_SENTENCES}).`);
+      throw new Error(`Run ${runNumber} : ${sentencesThisRun.length} phrases trouvées (< ${NUM_SENTENCES}).`);
     }
     const sentIdx = randpermIdx(sentencesThisRun.length);
     const orderedSentences = sentIdx.map(k => sentencesThisRun[k]).slice(0, NUM_SENTENCES);
 
     // CharList: association, circshift(mod(subjectNumber,NCharacters))
     const charAssoc = assoc.find(r => Number(r.run) === Number(runNumber));
-    if (!charAssoc) throw new Error(`Nessuna SentenceCharacterAssociation per run ${runNumber}`);
+    if (!charAssoc) throw new Error(`Aucune association phrase-personnage pour la run ${runNumber}`);
 
     const CharList = charAssoc.characters.slice();
     if (CharList.length < NUM_SENTENCES) {
-      throw new Error(`Run ${runNumber}: CharList length ${CharList.length} (< ${NUM_SENTENCES}).`);
+      throw new Error(`Run ${runNumber} : longueur CharList = ${CharList.length} (< ${NUM_SENTENCES}).`);
     }
 
     const shift = subjectNumber % N_CHARACTERS;
@@ -401,7 +401,7 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
 
       animationNameIdx.push([sentIdx1, waitIdx1, robotOkIdx, robotNotokIdx]);
 
-      // ✅ NOMI ANIMAZIONI ESATTI + CASE-SENSITIVE (come su GitHub)
+      // ✅ Exact animation names + CASE-SENSITIVE (GitHub)
       const sentAnimName = (trueSide === 1) ? "SentenceTrueRight" : "SentenceTrueLeft";
       const waitAnimName = (trueSide === 1) ? "WaitTrueRight" : "WaitTrueLeft";
 
@@ -422,7 +422,7 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
 
         audioFile: `Sentences/${sentenceFileNameOnly}`,
 
-        // es: SentenceTrueLeftP1.MP4 / WaitTrueRightP3.MP4
+        // e.g., SentenceTrueLeftP1.MP4 / WaitTrueRightP3.MP4
         animSentenceFile: `Animations/${sentAnimName}${characterId}.MP4`,
         animWaitFile: `Animations/${waitAnimName}${characterId}.MP4`,
 
@@ -471,8 +471,8 @@ var jsPsychMmoLoader = (function () {
       display_element.innerHTML = `
         <div class="mmo-form">
           <h1>MathOMeter</h1>
-          <p>Loading...</p>
-          <p style="font-size:14px; opacity:0.8;">(JSON + preload)</p>
+          <p>Chargement…</p>
+          <p style="font-size:14px; opacity:0.8;">(JSON + préchargement)</p>
         </div>
       `;
 
@@ -481,7 +481,7 @@ var jsPsychMmoLoader = (function () {
         a.preload = "auto";
         a.src = src;
         a.oncanplaythrough = () => resolve(true);
-        a.onerror = () => reject(new Error(`Audio preload error: ${src}`));
+        a.onerror = () => reject(new Error(`Erreur de préchargement audio : ${src}`));
       });
 
       const preloadVideo = (src) => new Promise((resolve, reject) => {
@@ -489,7 +489,7 @@ var jsPsychMmoLoader = (function () {
         v.preload = "auto";
         v.src = src;
         v.oncanplaythrough = () => resolve(true);
-        v.onerror = () => reject(new Error(`Video preload error: ${src}`));
+        v.onerror = () => reject(new Error(`Erreur de préchargement vidéo : ${src}`));
       });
 
       (async () => {
@@ -498,7 +498,7 @@ var jsPsychMmoLoader = (function () {
           const sentenceAssoc = await loadJSON("data/sentence_to_character.json");
 
           const subjectNumber = window.MMO_SUBJECT_NUMBER;
-          if (!Number.isFinite(subjectNumber)) throw new Error("MMO_SUBJECT_NUMBER non valido (NaN).");
+          if (!Number.isFinite(subjectNumber)) throw new Error("MMO_SUBJECT_NUMBER invalide (NaN).");
 
           const params = buildParamsAndTrials_PTBlike(subjectNumber, allSentences, sentenceAssoc);
           window.MMO_PARAMS = params;
@@ -526,10 +526,10 @@ var jsPsychMmoLoader = (function () {
             });
           }
 
-          // preload demo: primo trial della prima run DA ESEGUIRE
+          // preload demo: first trial of first run to execute
           const startRunIndex = Math.min(Math.max(params.lastRunCompleted + 1, 1), TOTAL_RUNS);
           const firstRun = params.runs.find(r => r.runIndex === startRunIndex);
-          if (!firstRun) throw new Error("Run di partenza non trovata nei params.");
+          if (!firstRun) throw new Error("Run de départ introuvable dans les paramètres.");
           const trialCfg = firstRun.trials[0];
 
           const audios = [trialCfg.beep, trialCfg.audioFile];
@@ -545,9 +545,9 @@ var jsPsychMmoLoader = (function () {
           console.error(e);
           display_element.innerHTML = `
             <div class="mmo-form">
-              <h1>Errore</h1>
-              <p>Non riesco a caricare JSON o media.</p>
-              <p style="font-size:14px; opacity:0.8;">Apri Console (F12) per il dettaglio.</p>
+              <h1>Erreur</h1>
+              <p>Impossible de charger les fichiers JSON ou multimédia.</p>
+              <p style="font-size:14px; opacity:0.8;">Ouvrez la console (F12) pour plus de détails.</p>
             </div>
           `;
         }
@@ -567,7 +567,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
     type: jsPsychHtmlKeyboardResponse,
     stimulus: fixationHTML(),
     choices: "NO_KEYS",
-    on_start: () => setDebugLabel(`BEEP (run ${cfg.runIndex} / orig ${cfg.runNumber} trial ${cfg.trialIndex})`),
+    on_start: () => setDebugLabel(`BEEP (run ${cfg.runIndex} / orig ${cfg.runNumber} essai ${cfg.trialIndex})`),
     on_load: () => {
       const trialRow = cfg.trialIndex - 1;
       MMO_TRIAL_I = trialRow;
@@ -603,7 +603,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
     trial_ends_after_audio: true,
     trial_ends_after_video: false,
     on_start: () => {
-      setDebugLabel("SENTENCE");
+      setDebugLabel("PHRASE");
       const trialRow = cfg.trialIndex - 1;
       MMO_RUN_QUESTIONS.onsets[trialRow][1] = relToTTL_s(performance.now());
     },
@@ -616,13 +616,13 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
     type: jsPsychVideoKeyboardResponse,
     stimulus: () => [cfg.animWaitFile],
 
-    // tastiera fallback (b/y); touch gestito via pointerdown
+    // keyboard fallback (b/y); touch handled via pointerdown
     choices: ["b", "y"],
     response_ends_trial: false,
     trial_duration: timing.responseDuration * 1000,
 
     on_start: () => {
-      setDebugLabel("WAIT (tap left/right | keyboard: y=left, b=right)");
+      setDebugLabel("RÉPONSE (tap gauche/droite | clavier : y=gauche, b=droite)");
     },
 
     on_load: function () {
@@ -652,7 +652,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
       window.addEventListener("keydown", onKeyDown, true);
       this._mmo_onKeyDown = onKeyDown;
 
-      // ✅ TOUCH: metà schermo sinistra/destra
+      // ✅ TOUCH: left/right half of screen
       const onPointerDown = (e) => {
         if (MMO_GOT_RESP) return;
         try { e.preventDefault(); } catch {}
@@ -741,7 +741,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
     choices: "NO_KEYS",
     trial_duration: timing.restDuration * 1000,
     on_start: () => {
-      setDebugLabel("REST");
+      setDebugLabel("REPOS");
       const trialRow = cfg.trialIndex - 1;
       stampFlip((tFlipRestStart) => {
         MMO_RUN_QUESTIONS.onsets[trialRow][4] = relToTTL_s(tFlipRestStart);
@@ -762,7 +762,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
 
     runTimeline.push({
       type: jsPsychHtmlKeyboardResponse,
-      stimulus: `<div class="mmo-form"><h1>MathOMeter</h1><p>Saving run ${cfg.runIndex}...</p></div>`,
+      stimulus: `<div class="mmo-form"><h1>MathOMeter</h1><p>Enregistrement de la run ${cfg.runIndex}…</p></div>`,
       choices: "NO_KEYS",
       trial_duration: 10,
       on_start: () => {
@@ -790,7 +790,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
               trueSide: cfg.trueSide,
               mapping: mappingString(cfg.trueSide),
 
-              // ✅ TTL per-run (quello settato nella schermata READY della run)
+              // ✅ TTL per-run (set on READY screen)
               TTLonset_ms: MMO_TTL_T0_MS,
 
               questions: MMO_RUN_QUESTIONS
@@ -801,32 +801,29 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
         });
       }
     });
-
-    // dopo il salvataggio, NON mettiamo una terza schermata "break":
-    // la prossima run avrà già "confirm + ready" (aggiunta nel builder runTimeline)
   }
 }
 
 // ====== START ======
 window.addEventListener("DOMContentLoaded", () => {
   const jsPsych = initJsPsych({
-    on_finish: () => console.log("Esperimento finito (salvataggi run-by-run già fatti).")
+    on_finish: () => console.log("Expérience terminée (sauvegarde run par run déjà effectuée).")
   });
 
   const timeline = [];
 
-  // 1) Subject number: tastiera + INVIO
+  // 1) Subject number: keyboard + ENTER
   let MMO_subjectNumberStr = "";
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: `
       <div class="mmo-form">
         <h1>MathOMeter</h1>
-        <p>Subject number (e.g., 01, 02, 12...)</p>
+        <p>Numéro de sujet (ex. 01, 02, 12…)</p>
         <p style="margin-top:18px;">
           <input id="mmo-subject-number" type="text" inputmode="numeric" autocomplete="off" />
         </p>
-        <div class="mmo-hint">Premi <b>INVIO</b> per continuare</div>
+        <div class="mmo-hint">Appuyez sur <b>ENTRÉE</b> pour continuer</div>
       </div>
     `,
     choices: ["Enter"],
@@ -840,8 +837,8 @@ window.addEventListener("DOMContentLoaded", () => {
     on_finish: () => {
       const n = parseInt((MMO_subjectNumberStr || "").trim(), 10);
       if (!Number.isFinite(n) || n < 1) {
-        alert("Insert a valid subject number (1, 2, 3, …).");
-        jsPsych.endExperiment("Dati mancanti.");
+        alert("Veuillez saisir un numéro de sujet valide (1, 2, 3, …).");
+        jsPsych.endExperiment("Données manquantes.");
         return;
       }
       window.MMO_SUBJECT_NUMBER = n;
@@ -852,7 +849,8 @@ window.addEventListener("DOMContentLoaded", () => {
   // 2) Loader (JSON + preload demo)
   timeline.push({ type: jsPsychMmoLoader });
 
-  // 3) Costruisci dinamicamente TUTTO: (resume->run1 confirm+ready)->trials->(run2 confirm+ready)->...
+  // 3) Build everything dynamically:
+  //    (run confirm+ready)->trials->(next run confirm+ready)->...
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: fixationHTML(),
@@ -860,27 +858,27 @@ window.addEventListener("DOMContentLoaded", () => {
     trial_duration: 1,
     on_start: () => {
       const params = window.MMO_PARAMS;
-      if (!params) throw new Error("MMO_PARAMS non trovato: loader non ha caricato i parametri.");
+      if (!params) throw new Error("MMO_PARAMS introuvable : le loader n’a pas chargé les paramètres.");
 
       const last = Number(params.lastRunCompleted || 0);
       const startRunIndex = Math.min(Math.max(last + 1, 1), TOTAL_RUNS);
 
       if (last >= TOTAL_RUNS) {
-        jsPsych.endExperiment("All runs completed.");
+        jsPsych.endExperiment("Toutes les runs sont terminées.");
         return;
       }
 
       const runTimeline = [];
 
-      // per ogni run da eseguire:
+      // for each run to execute:
       for (let r = 0; r < params.runs.length; r++) {
         const run = params.runs[r];
         if (run.runIndex < startRunIndex) continue;
 
-        // ✅ (A) schermata “Subject/Run” + (B) schermata “Ready” -> TTL anchor PER-RUN
+        // ✅ (A) “Sujet/Run” + (B) “Prêt” -> TTL anchor PER-RUN
         pushRunConfirmAndReady(runTimeline, run.runIndex, run.runNumber, jsPsych);
 
-        // (C) una piccola fixation prima del beep (se vuoi mantenerla per ogni run)
+        // (C) small fixation before beep (per run)
         runTimeline.push({
           type: jsPsychHtmlKeyboardResponse,
           stimulus: fixationHTML(),
@@ -891,24 +889,24 @@ window.addEventListener("DOMContentLoaded", () => {
           data: { phase: "fixation_pre_beep", runIndex: run.runIndex, runNumber: run.runNumber }
         });
 
-        // (D) trials della run
+        // (D) trials of the run
         for (let t = 0; t < run.trials.length; t++) {
           addOneTrialBlock(runTimeline, run.trials[t], jsPsych);
         }
       }
 
-      // schermo finale (tap o tasto) dopo l’ultima run
+      // Final screen (tap or key) after last run
       runTimeline.push({
         type: jsPsychHtmlButtonResponse,
         stimulus: `
           <div class="mmo-form">
             <h1>MathOMeter</h1>
-            <p>Fine.</p>
-            <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per chiudere</p>
+            <p>Fin.</p>
+            <p style="margin-top:18px;">Touchez l’écran (ou appuyez sur une touche) pour fermer</p>
           </div>
         `,
         choices: [" "],
-        button_html: fullScreenButtonHTML("End"),
+        button_html: fullScreenButtonHTML("Fin"),
         on_load: function () {
           const onKeyDown = (e) => {
             try { e.preventDefault(); } catch {}
@@ -933,6 +931,3 @@ window.addEventListener("DOMContentLoaded", () => {
 
   jsPsych.run(timeline);
 });
-
-
-

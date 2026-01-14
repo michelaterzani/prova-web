@@ -805,44 +805,75 @@ timeline.push({
   // Loader (costruisce params+runs e li mette in window.MMO_PARAMS)
   timeline.push({ type: jsPsychMmoLoader });
 
-  // ✅ SCHERMATA RESUME/START (come PTB "currentRun"): mostra da quale run riparti
-  timeline.push({
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: () => {
-      const params = window.MMO_PARAMS;
-      const subjectNumber = window.MMO_SUBJECT_NUMBER;
-      const last = Number(params?.lastRunCompleted || 0);
-      const next = Math.min(Math.max(last + 1, 1), TOTAL_RUNS);
+  // ✅ SCHERMATA RESUME/START: tap anywhere OR any key
+timeline.push({
+  type: jsPsychHtmlButtonResponse,
+  stimulus: () => {
+    const params = window.MMO_PARAMS;
+    const subjectNumber = window.MMO_SUBJECT_NUMBER;
+    const last = Number(params?.lastRunCompleted || 0);
+    const next = Math.min(Math.max(last + 1, 1), TOTAL_RUNS);
 
-      if (last >= TOTAL_RUNS) {
-        return `
-          <div class="mmo-form">
-            <h1>MathOMeter</h1>
-            <p>Subject ${subjStr2(subjectNumber)} has completed all runs.</p>
-            <p style="margin-top:18px;">Press any key to end.</p>
-          </div>
-        `;
-      }
-
+    if (last >= TOTAL_RUNS) {
       return `
         <div class="mmo-form">
           <h1>MathOMeter</h1>
-          <p>Subject <b>${subjStr2(subjectNumber)}</b></p>
-          <p>Last run completed: <b>${last}</b></p>
-          <p>Starting from: <b>Run ${next}</b></p>
-          <p style="margin-top:18px;">Press any key to continue</p>
+          <p>Subject ${subjStr2(subjectNumber)} has completed all runs.</p>
+          <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per terminare.</p>
         </div>
       `;
-    },
-    choices: "ALL_KEYS",
-    on_finish: () => {
-      const params = window.MMO_PARAMS;
-      const last = Number(params?.lastRunCompleted || 0);
-      if (last >= TOTAL_RUNS) {
-        jsPsych.endExperiment("All runs completed.");
-      }
     }
-  });
+
+    return `
+      <div class="mmo-form">
+        <h1>MathOMeter</h1>
+        <p>Subject <b>${subjStr2(subjectNumber)}</b></p>
+        <p>Last run completed: <b>${last}</b></p>
+        <p>Starting from: <b>Run ${next}</b></p>
+        <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per continuare</p>
+      </div>
+    `;
+  },
+
+  choices: [" "],
+  button_html: `
+    <button style="
+      position:fixed; inset:0;
+      width:100vw; height:100vh;
+      opacity:0; border:0; padding:0; margin:0;
+      background:transparent;
+      cursor:pointer;
+      touch-action: manipulation;
+    " aria-label="Continue"></button>
+  `,
+
+  on_load: function () {
+    const onKeyDown = (e) => {
+      try { e.preventDefault(); } catch {}
+      try { e.stopPropagation(); } catch {}
+      jsPsych.finishTrial({ continued_by: "keyboard" });
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    this._mmo_resume_onKeyDown = onKeyDown;
+  },
+
+  on_finish: function (data) {
+    if (this._mmo_resume_onKeyDown) {
+      window.removeEventListener("keydown", this._mmo_resume_onKeyDown, { capture: true });
+      this._mmo_resume_onKeyDown = null;
+    }
+
+    const params = window.MMO_PARAMS;
+    const last = Number(params?.lastRunCompleted || 0);
+
+    if (!data.continued_by) data.continued_by = "touch";
+
+    if (last >= TOTAL_RUNS) {
+      jsPsych.endExperiment("All runs completed.");
+    }
+  }
+});
+
 
   // Fixation pre-beep (solo una volta, come PTB pre-trial onset)
   timeline.push({
@@ -885,4 +916,5 @@ timeline.push({
 
   jsPsych.run(timeline);
 });
+
 

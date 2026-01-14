@@ -1,13 +1,17 @@
 // main.js — MathOMeter FULL (6 run x 20 trial)
 // PTB-LIKE TIMING + PTB-IDENTICAL PARAMS + PTB-IDENTICAL RUN FILE NAMING
 //
-// Struttura:
+// Struttura (come richiesto):
 //   1) SubjectNumber (tastiera + INVIO)
-//   2) TTL onset / start: touch ovunque OPPURE qualsiasi tasto
-//   3) Loader (JSON + preload demo)
-//   4) Resume/Start: touch ovunque OPPURE qualsiasi tasto
-//   5) Trials (response: touch metà schermo sx/dx OPPURE tastiera y/b)
-//   6) Run break: touch ovunque OPPURE qualsiasi tasto
+//   2) Loader (JSON + preload demo)
+//   3) Screen “Subject/Run” (tap ovunque OPPURE qualsiasi tasto)  ✅ (conferma)
+//   4) Screen “Ready” (tap ovunque OPPURE qualsiasi tasto)        ✅ TTL anchor = QUI (per-run)
+//   5) Trials
+//   6) A ogni run successiva: di nuovo (3) conferma run + (4) ready (TTLonset per-run)
+//
+// Response:
+//   - Touch: metà schermo sx/dx
+//   - Tastiera: y=left, b=right
 //
 // Salvataggio:
 //   - params (PTB-like): mathometer_subjXX_params.json (1 volta all'inizio, opzionale anche ad ogni run)
@@ -17,17 +21,6 @@
 // questions.onsets(trial,:) = [beepFlip, sentenceStart, respFlip, feedbackStart, restFlipStart, restFlipEnd]
 // col1/3/5/6 = "Flip-based"  -> requestAnimationFrame timestamp (flip-like)
 // col2/4     = "GetSecs-based" -> performance.now timestamp
-//
-// PTB-identical behavior targets:
-// - run_order = randperm(totalRuns) PER SOGGETTO, persistente (come params.mat)
-// - within each run: shuffle sentences, take 20
-// - character list: circshift(CharList, mod(subjectNumber,NCharacters)) then take first 20
-// - trueSide: random for first RUN-INDEX, then alternates (3 - prev)
-// - FILE naming: run_1..run_6 in ordine di esecuzione (runIndex), NON runNumber originale
-//
-// Interrupt/resume (browser):
-// - lastRunCompleted viene salvato in localStorage e sovrascritto (come PTB che sovrascrive params.mat)
-// - se ricarichi e reinserisci lo stesso subjectNumber, riparte da lastRunCompleted+1
 //
 // =========================
 // ⚠️ IMPORTANT: index.html
@@ -231,6 +224,85 @@ function fullScreenButtonHTML(ariaLabel = "Continue") {
   `;
 }
 
+/* =========================
+   ✅ RUN CONFIRM + READY (TTLonset PER-RUN)
+   ========================= */
+function pushRunConfirmAndReady(tl, runIndex, runNumber, jsPsych) {
+  // (1) Conferma run (tap anywhere OR any key)
+  tl.push({
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+      <div class="mmo-form">
+        <h1>MathOMeter</h1>
+        <p>Subject: <b>${subjStr2(window.MMO_SUBJECT_NUMBER)}</b></p>
+        <p>Stai per iniziare: <b>Run ${runIndex}</b></p>
+        <p style="font-size:14px; opacity:0.8;">(orig runNumber: ${runNumber})</p>
+        <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per continuare</p>
+      </div>
+    `,
+    choices: [" "],
+    button_html: fullScreenButtonHTML("Continue"),
+    data: { phase: "run_confirm", runIndex, runNumber },
+
+    on_load: function () {
+      const onKeyDown = (e) => {
+        try { e.preventDefault(); } catch {}
+        try { e.stopPropagation(); } catch {}
+        jsPsych.finishTrial({ continued_by: "keyboard" });
+      };
+      window.addEventListener("keydown", onKeyDown, true);
+      this._mmo_runconfirm_onKeyDown = onKeyDown;
+    },
+
+    on_finish: function (data) {
+      if (this._mmo_runconfirm_onKeyDown) {
+        window.removeEventListener("keydown", this._mmo_runconfirm_onKeyDown, true);
+        this._mmo_runconfirm_onKeyDown = null;
+      }
+      if (!data.continued_by) data.continued_by = "touch";
+    }
+  });
+
+  // (2) Ready screen: TAP -> TTL anchor (reset per-run)
+  tl.push({
+    type: jsPsychHtmlButtonResponse,
+    stimulus: `
+      <div class="mmo-form">
+        <h1>MathOMeter</h1>
+        <p>Tocca un qualunque punto dello schermo quando sei pronto</p>
+        <p style="font-size:14px; opacity:0.8;">(oppure premi un tasto)</p>
+      </div>
+    `,
+    choices: [" "],
+    button_html: fullScreenButtonHTML("Ready"),
+    data: { phase: "ready_ttl_anchor", runIndex, runNumber },
+
+    on_load: function () {
+      const onKeyDown = (e) => {
+        try { e.preventDefault(); } catch {}
+        try { e.stopPropagation(); } catch {}
+        jsPsych.finishTrial({ started_by: "keyboard" });
+      };
+      window.addEventListener("keydown", onKeyDown, true);
+      this._mmo_ready_onKeyDown = onKeyDown;
+    },
+
+    on_finish: function (data) {
+      if (this._mmo_ready_onKeyDown) {
+        window.removeEventListener("keydown", this._mmo_ready_onKeyDown, true);
+        this._mmo_ready_onKeyDown = null;
+      }
+      if (!data.started_by) data.started_by = "touch";
+
+      // ✅ TTL anchor PER-RUN
+      MMO_TTL_T0_MS = performance.now();
+
+      // reset buffer run
+      MMO_RUN_QUESTIONS = null;
+    }
+  });
+}
+
 // ====== BUILD PARAMS PTB-IDENTICAL + TRIAL CFG ======
 function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
   const N_CHARACTERS = CHARACTER_IDS.length;
@@ -291,7 +363,7 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
     const sentenceTheme = [];
     const sentenceTruth = [];
     const sentenceGender = [];
-    const animationNameIdx = [];    // 20x4 1-based indices
+    const animationNameIdx = [];
 
     const robotOkIdx = 4 * N_CHARACTERS + 1;    // 17
     const robotNotokIdx = 4 * N_CHARACTERS + 2; // 18
@@ -304,11 +376,9 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
       const characterId = thisRunChars[t];
       const gender = CHARACTER_GENDER[characterId];
 
-      // sentence filename (PTB-style)
       const sentenceFileNameOnly =
         `Sentence${s.sentenceId}_${s.category}_${s.theme}_${s.truthValue}_Gender_${gender}.wav`;
 
-      // animation indices PTB-like
       const c = CHARACTER_IDS.indexOf(characterId) + 1; // 1..4
       const baseIdx = 4 * (c - 1); // 0,4,8,12
       let sentIdx1, waitIdx1;
@@ -331,7 +401,7 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
 
       animationNameIdx.push([sentIdx1, waitIdx1, robotOkIdx, robotNotokIdx]);
 
-      // ✅ NOMI ANIMAZIONI ESATTI (come su GitHub) + CASE SENSITIVO
+      // ✅ NOMI ANIMAZIONI ESATTI + CASE-SENSITIVE (come su GitHub)
       const sentAnimName = (trueSide === 1) ? "SentenceTrueRight" : "SentenceTrueLeft";
       const waitAnimName = (trueSide === 1) ? "WaitTrueRight" : "WaitTrueLeft";
 
@@ -351,8 +421,11 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
         gender,
 
         audioFile: `Sentences/${sentenceFileNameOnly}`,
-        animSentenceFile: `Animations/${sentAnimName}${characterId}.MP4`, // e.g. SentenceTrueLeftP1.MP4
-        animWaitFile: `Animations/${waitAnimName}${characterId}.MP4`,     // e.g. WaitTrueLeftP1.MP4
+
+        // es: SentenceTrueLeftP1.MP4 / WaitTrueRightP3.MP4
+        animSentenceFile: `Animations/${sentAnimName}${characterId}.MP4`,
+        animWaitFile: `Animations/${waitAnimName}${characterId}.MP4`,
+
         robotOk: `Animations/FeedbackOkRobot.MP4`,
         robotNotOk: `Animations/FeedbackNotOkRobot.MP4`,
         beep: `Sentences/beep.wav`,
@@ -440,7 +513,6 @@ var jsPsychMmoLoader = (function () {
                 runIndex: r.runIndex,
                 runNumber: r.runNumber,
                 trueSide: r.trueSide,
-
                 sentenceNames: r.sentenceNames,
                 characters: r.characters,
                 genders: r.genders,
@@ -717,7 +789,10 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
               runOrder,
               trueSide: cfg.trueSide,
               mapping: mappingString(cfg.trueSide),
+
+              // ✅ TTL per-run (quello settato nella schermata READY della run)
               TTLonset_ms: MMO_TTL_T0_MS,
+
               questions: MMO_RUN_QUESTIONS
             });
 
@@ -727,41 +802,8 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
       }
     });
 
-    // ✅ RUN BREAK: touch ovunque OPPURE qualsiasi tasto
-    const isLastRun = (cfg.runIndex === TOTAL_RUNS);
-    if (!isLastRun) {
-      runTimeline.push({
-        type: jsPsychHtmlButtonResponse,
-        stimulus: `
-          <div class="mmo-form">
-            <h1>Run ${cfg.runIndex} completed</h1>
-            <p>Next: <b>Run ${cfg.runIndex + 1}</b></p>
-            <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per iniziare</p>
-          </div>
-        `,
-        choices: [" "],
-        button_html: fullScreenButtonHTML("Start next run"),
-        data: { phase: "run_break", completed_runIndex: cfg.runIndex, completed_runNumber: cfg.runNumber },
-
-        on_load: function () {
-          const onKeyDown = (e) => {
-            try { e.preventDefault(); } catch {}
-            try { e.stopPropagation(); } catch {}
-            jsPsych.finishTrial({ started_by: "keyboard" });
-          };
-          window.addEventListener("keydown", onKeyDown, true);
-          this._mmo_break_onKeyDown = onKeyDown;
-        },
-
-        on_finish: function (data) {
-          if (this._mmo_break_onKeyDown) {
-            window.removeEventListener("keydown", this._mmo_break_onKeyDown, true);
-            this._mmo_break_onKeyDown = null;
-          }
-          if (!data.started_by) data.started_by = "touch";
-        }
-      });
-    }
+    // dopo il salvataggio, NON mettiamo una terza schermata "break":
+    // la prossima run avrà già "confirm + ready" (aggiunta nel builder runTimeline)
   }
 }
 
@@ -807,116 +849,10 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // 2) TTL anchor (tap anywhere OR any key)
-  timeline.push({
-    type: jsPsychHtmlButtonResponse,
-    stimulus: `
-      <div class="mmo-form">
-        <h1>MathOMeter</h1>
-        <p>Tocca un qualunque punto dello schermo per cominciare</p>
-        <p style="font-size:14px; opacity:0.8;">(oppure premi un tasto)</p>
-      </div>
-    `,
-    choices: [" "],
-    button_html: fullScreenButtonHTML("Start"),
-    data: { phase: "press_any_key_or_touch" },
-
-    on_load: function () {
-      const onKeyDown = (e) => {
-        try { e.preventDefault(); } catch {}
-        try { e.stopPropagation(); } catch {}
-        jsPsych.finishTrial({ started_by: "keyboard" });
-      };
-      window.addEventListener("keydown", onKeyDown, true);
-      this._mmo_start_onKeyDown = onKeyDown;
-    },
-
-    on_finish: function (data) {
-      if (this._mmo_start_onKeyDown) {
-        window.removeEventListener("keydown", this._mmo_start_onKeyDown, true);
-        this._mmo_start_onKeyDown = null;
-      }
-
-      if (MMO_TTL_T0_MS == null) MMO_TTL_T0_MS = performance.now();
-      if (!data.started_by) data.started_by = "touch";
-    }
-  });
-
-  // 3) Loader
+  // 2) Loader (JSON + preload demo)
   timeline.push({ type: jsPsychMmoLoader });
 
-  // 4) ✅ RESUME/START: tap anywhere OR any key
-  timeline.push({
-    type: jsPsychHtmlButtonResponse,
-    stimulus: () => {
-      const params = window.MMO_PARAMS;
-      const subjectNumber = window.MMO_SUBJECT_NUMBER;
-      const last = Number(params?.lastRunCompleted || 0);
-      const next = Math.min(Math.max(last + 1, 1), TOTAL_RUNS);
-
-      if (last >= TOTAL_RUNS) {
-        return `
-          <div class="mmo-form">
-            <h1>MathOMeter</h1>
-            <p>Subject ${subjStr2(subjectNumber)} has completed all runs.</p>
-            <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per terminare.</p>
-          </div>
-        `;
-      }
-
-      return `
-        <div class="mmo-form">
-          <h1>MathOMeter</h1>
-          <p>Subject <b>${subjStr2(subjectNumber)}</b></p>
-          <p>Last run completed: <b>${last}</b></p>
-          <p>Starting from: <b>Run ${next}</b></p>
-          <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per continuare</p>
-        </div>
-      `;
-    },
-
-    choices: [" "],
-    button_html: fullScreenButtonHTML("Continue"),
-    data: { phase: "resume_screen" },
-
-    on_load: function () {
-      const onKeyDown = (e) => {
-        try { e.preventDefault(); } catch {}
-        try { e.stopPropagation(); } catch {}
-        jsPsych.finishTrial({ continued_by: "keyboard" });
-      };
-      window.addEventListener("keydown", onKeyDown, true);
-      this._mmo_resume_onKeyDown = onKeyDown;
-    },
-
-    on_finish: function (data) {
-      if (this._mmo_resume_onKeyDown) {
-        window.removeEventListener("keydown", this._mmo_resume_onKeyDown, true);
-        this._mmo_resume_onKeyDown = null;
-      }
-
-      if (!data.continued_by) data.continued_by = "touch";
-
-      const params = window.MMO_PARAMS;
-      const last = Number(params?.lastRunCompleted || 0);
-      if (last >= TOTAL_RUNS) {
-        jsPsych.endExperiment("All runs completed.");
-      }
-    }
-  });
-
-  // 5) Fixation pre-beep (solo una volta)
-  timeline.push({
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: fixationHTML(),
-    choices: "NO_KEYS",
-    trial_duration: timing.fixationDuration * 1000,
-    on_start: () => setDebugLabel("FIXATION"),
-    on_finish: () => clearDebugLabel(),
-    data: { phase: "fixation_pre_beep" }
-  });
-
-  // 6) Build run timeline dinamicamente (resume)
+  // 3) Costruisci dinamicamente TUTTO: (resume->run1 confirm+ready)->trials->(run2 confirm+ready)->...
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: fixationHTML(),
@@ -926,18 +862,70 @@ window.addEventListener("DOMContentLoaded", () => {
       const params = window.MMO_PARAMS;
       if (!params) throw new Error("MMO_PARAMS non trovato: loader non ha caricato i parametri.");
 
-      const startRunIndex = Math.min(Math.max((params.lastRunCompleted || 0) + 1, 1), TOTAL_RUNS);
+      const last = Number(params.lastRunCompleted || 0);
+      const startRunIndex = Math.min(Math.max(last + 1, 1), TOTAL_RUNS);
+
+      if (last >= TOTAL_RUNS) {
+        jsPsych.endExperiment("All runs completed.");
+        return;
+      }
 
       const runTimeline = [];
 
+      // per ogni run da eseguire:
       for (let r = 0; r < params.runs.length; r++) {
         const run = params.runs[r];
         if (run.runIndex < startRunIndex) continue;
 
+        // ✅ (A) schermata “Subject/Run” + (B) schermata “Ready” -> TTL anchor PER-RUN
+        pushRunConfirmAndReady(runTimeline, run.runIndex, run.runNumber, jsPsych);
+
+        // (C) una piccola fixation prima del beep (se vuoi mantenerla per ogni run)
+        runTimeline.push({
+          type: jsPsychHtmlKeyboardResponse,
+          stimulus: fixationHTML(),
+          choices: "NO_KEYS",
+          trial_duration: timing.fixationDuration * 1000,
+          on_start: () => setDebugLabel("FIXATION"),
+          on_finish: () => clearDebugLabel(),
+          data: { phase: "fixation_pre_beep", runIndex: run.runIndex, runNumber: run.runNumber }
+        });
+
+        // (D) trials della run
         for (let t = 0; t < run.trials.length; t++) {
           addOneTrialBlock(runTimeline, run.trials[t], jsPsych);
         }
       }
+
+      // schermo finale (tap o tasto) dopo l’ultima run
+      runTimeline.push({
+        type: jsPsychHtmlButtonResponse,
+        stimulus: `
+          <div class="mmo-form">
+            <h1>MathOMeter</h1>
+            <p>Fine.</p>
+            <p style="margin-top:18px;">Tocca lo schermo (o premi un tasto) per chiudere</p>
+          </div>
+        `,
+        choices: [" "],
+        button_html: fullScreenButtonHTML("End"),
+        on_load: function () {
+          const onKeyDown = (e) => {
+            try { e.preventDefault(); } catch {}
+            try { e.stopPropagation(); } catch {}
+            jsPsych.finishTrial({ ended_by: "keyboard" });
+          };
+          window.addEventListener("keydown", onKeyDown, true);
+          this._mmo_end_onKeyDown = onKeyDown;
+        },
+        on_finish: function (data) {
+          if (this._mmo_end_onKeyDown) {
+            window.removeEventListener("keydown", this._mmo_end_onKeyDown, true);
+            this._mmo_end_onKeyDown = null;
+          }
+          if (!data.ended_by) data.ended_by = "touch";
+        }
+      });
 
       jsPsych.addNodeToEndOfTimeline({ timeline: runTimeline });
     }
@@ -945,5 +933,6 @@ window.addEventListener("DOMContentLoaded", () => {
 
   jsPsych.run(timeline);
 });
+
 
 

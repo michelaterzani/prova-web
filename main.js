@@ -343,11 +343,11 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
         gender,
 
         audioFile: `Sentences/${sentenceFileNameOnly}`,
-        animSentenceFile: `Animations/${sentAnimName}P${cIndex}.MP4`,
-        animWaitFile: `Animations/${waitAnimName}P${cIndex}.MP4`,
-        robotOk: `Animations/FeedbackOkRobot.MP4`,
-        robotNotOk: `Animations/FeedbackNotokRobot.MP4`,
-        beep: `Sentences/beep.wav`,
+animSentenceFile: `Animations/${sentAnimName}P${cIndex}.MP4`,
+animWaitFile: `Animations/${waitAnimName}P${cIndex}.MP4`,
+robotOk: `Animations/FeedbackOkRobot.MP4`,
+robotNotOk: `Animations/FeedbackNotOkRobot.MP4`,
+beep: `Sentences/beep.wav`,
       });
     }
 
@@ -906,4 +906,5 @@ window.addEventListener("DOMContentLoaded", () => {
 
   jsPsych.run(timeline);
 });
+
 

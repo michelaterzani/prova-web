@@ -326,6 +326,7 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
       const sentAnimName = (trueSide === 1) ? "SentenceTrueRight" : "SentenceTrueLeft";
       const waitAnimName = (trueSide === 1) ? "WaitTrueRight" : "WaitTrueLeft";
 
+      // ✅ FIX: su GitHub i file sono .MP4 (case-sensitive)
       trials.push({
         runIndex,
         runNumber,
@@ -342,10 +343,10 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
         gender,
 
         audioFile: `Sentences/${sentenceFileNameOnly}`,
-        animSentenceFile: `Animations/${sentAnimName}P${cIndex}.mp4`,
-        animWaitFile: `Animations/${waitAnimName}P${cIndex}.mp4`,
-        robotOk: `Animations/FeedbackOkRobot.mp4`,
-        robotNotOk: `Animations/FeedbackNotokRobot.mp4`,
+        animSentenceFile: `Animations/${sentAnimName}P${cIndex}.MP4`,
+        animWaitFile: `Animations/${waitAnimName}P${cIndex}.MP4`,
+        robotOk: `Animations/FeedbackOkRobot.MP4`,
+        robotNotOk: `Animations/FeedbackNotokRobot.MP4`,
         beep: `Sentences/beep.wav`,
       });
     }
@@ -574,11 +575,10 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
       window.addEventListener("keydown", onKeyDown, { capture: true });
       this._mmo_onKeyDown = onKeyDown;
 
-      // ✅ TOUCH: tap metà schermo sinistra/destra (pointerdown = touch+mouse+pen)
+      // ✅ TOUCH: tap metà schermo sinistra/destra
       const onPointerDown = (e) => {
         if (MMO_GOT_RESP) return;
 
-        // evita selezioni/scroll “strani” su alcuni device
         try { e.preventDefault(); } catch {}
         try { e.stopPropagation(); } catch {}
 
@@ -681,7 +681,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
     data: () => ({ phase: "rest", ...cfg })
   });
 
-  // === end of run (PTB-style: save runIndex as file name run_1..run_6) ===
+  // === end of run ===
   if (cfg.trialIndex === NUM_SENTENCES) {
     runTimeline.push({
       type: jsPsychHtmlKeyboardResponse,
@@ -693,10 +693,8 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
         const subjStr = subjStr2(subjectNumber);
         const runOrder = window.MMO_PARAMS?.runOrder || null;
 
-        // aggiorna "params.mat" browser-side (sovrascrive come PTB)
         updateLastRunCompleted(subjectNumber, cfg.runIndex);
 
-        // aggiorna anche lo stato runtime (resume nella stessa sessione)
         if (window.MMO_PARAMS) window.MMO_PARAMS.lastRunCompleted = cfg.runIndex;
 
         if (DOWNLOAD_PARAMS_EACH_RUN) {
@@ -704,13 +702,12 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
           downloadJSON(`mathometer_subj${subjStr}_params_after_run_${cfg.runIndex}.json`, p || {});
         }
 
-        // aspetta 2 frame: lascia completare stampFlip del REST (col6)
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             downloadJSON(`mathometer_subj${subjStr}_run_${cfg.runIndex}.json`, {
               subjectNumber,
-              runIndex: cfg.runIndex,     // ordine esecuzione (PTB runs(i))
-              runNumber: cfg.runNumber,   // run originale (run_order(i))
+              runIndex: cfg.runIndex,
+              runNumber: cfg.runNumber,
               runOrder,
               trueSide: cfg.trueSide,
               mapping: mappingString(cfg.trueSide),
@@ -724,7 +721,6 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
       }
     });
 
-    // Break screen: PTB-style (next run) in ordine di esecuzione
     const isLastRun = (cfg.runIndex === TOTAL_RUNS);
     if (!isLastRun) {
       runTimeline.push({
@@ -795,7 +791,7 @@ window.addEventListener("DOMContentLoaded", () => {
         <p style="font-size:14px; opacity:0.8;">(oppure premi un tasto)</p>
       </div>
     `,
-    choices: [" "], // bottone fittizio
+    choices: [" "],
     button_html: `
       <button style="
         position:fixed; inset:0;
@@ -808,7 +804,6 @@ window.addEventListener("DOMContentLoaded", () => {
     data: { phase: "press_any_key_or_touch" },
 
     on_load: function () {
-      // supporto tastiera: qualsiasi tasto fa partire, come prima
       const onKeyDown = (e) => {
         try { e.preventDefault(); } catch {}
         try { e.stopPropagation(); } catch {}
@@ -819,24 +814,20 @@ window.addEventListener("DOMContentLoaded", () => {
     },
 
     on_finish: function (data) {
-      // cleanup
       if (this._mmo_start_onKeyDown) {
         window.removeEventListener("keydown", this._mmo_start_onKeyDown, { capture: true });
         this._mmo_start_onKeyDown = null;
       }
 
-      // TTL onset (ancora una sola volta)
       if (MMO_TTL_T0_MS == null) MMO_TTL_T0_MS = performance.now();
-
-      // se è partito da tap (button), aggiungi flag
       if (!data.started_by) data.started_by = "touch";
     }
   });
 
-  // 3) Loader (costruisce params+runs e li mette in window.MMO_PARAMS)
+  // 3) Loader
   timeline.push({ type: jsPsychMmoLoader });
 
-  // 4) Schermata RESUME/START (come PTB currentRun)
+  // 4) Resume
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: () => {
@@ -875,7 +866,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Fixation pre-beep (solo una volta, come PTB pre-trial onset)
+  // Fixation pre-beep
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: fixationHTML(),
@@ -896,14 +887,13 @@ window.addEventListener("DOMContentLoaded", () => {
       const params = window.MMO_PARAMS;
       if (!params) throw new Error("MMO_PARAMS non trovato: loader non ha caricato i parametri.");
 
-      // riparti da lastRunCompleted+1 (resume)
       const startRunIndex = Math.min(Math.max((params.lastRunCompleted || 0) + 1, 1), TOTAL_RUNS);
 
       const runTimeline = [];
 
       for (let r = 0; r < params.runs.length; r++) {
         const run = params.runs[r];
-        if (run.runIndex < startRunIndex) continue; // skip runs già completate
+        if (run.runIndex < startRunIndex) continue;
 
         for (let t = 0; t < run.trials.length; t++) {
           addOneTrialBlock(runTimeline, run.trials[t], jsPsych);
@@ -916,3 +906,4 @@ window.addEventListener("DOMContentLoaded", () => {
 
   jsPsych.run(timeline);
 });
+

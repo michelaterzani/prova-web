@@ -753,21 +753,54 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // TTL anchor
-  timeline.push({
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: `
-      <div class="mmo-form">
-        <h1>MathOMeter</h1>
-        <p>Premi un qualunque tasto per cominciare</p>
-      </div>
-    `,
-    choices: "ALL_KEYS",
-    data: { phase: "press_any_key" },
-    on_finish: () => {
-      if (MMO_TTL_T0_MS == null) MMO_TTL_T0_MS = performance.now();
+  // TTL anchor (tap anywhere OR any key)
+timeline.push({
+  type: jsPsychHtmlButtonResponse,
+  stimulus: `
+    <div class="mmo-form">
+      <h1>MathOMeter</h1>
+      <p>Tocca un qualunque punto dello schermo per cominciare</p>
+      <p style="font-size:14px; opacity:0.8;">(oppure premi un tasto)</p>
+    </div>
+  `,
+  choices: [" "], // bottone fittizio
+  button_html: `
+    <button style="
+      position:fixed; inset:0;
+      width:100vw; height:100vh;
+      opacity:0; border:0; padding:0; margin:0;
+      background:transparent;
+      cursor:pointer;
+      touch-action: manipulation;
+    " aria-label="Start"></button>
+  `,
+  data: { phase: "press_any_key_or_touch" },
+
+  on_load: function () {
+    // fallback tastiera: qualsiasi tasto
+    const onKeyDown = (e) => {
+      try { e.preventDefault(); } catch {}
+      try { e.stopPropagation(); } catch {}
+      jsPsych.finishTrial({ started_by: "keyboard" });
+    };
+    window.addEventListener("keydown", onKeyDown, { capture: true });
+    this._mmo_start_onKeyDown = onKeyDown;
+  },
+
+  on_finish: function (data) {
+    // cleanup listener tastiera
+    if (this._mmo_start_onKeyDown) {
+      window.removeEventListener("keydown", this._mmo_start_onKeyDown, { capture: true });
+      this._mmo_start_onKeyDown = null;
     }
-  });
+
+    // TTL onset (una sola volta)
+    if (MMO_TTL_T0_MS == null) MMO_TTL_T0_MS = performance.now();
+
+    // se è partito da tap (button), aggiungi flag
+    if (!data.started_by) data.started_by = "touch";
+  }
+});
 
   // Loader (costruisce params+runs e li mette in window.MMO_PARAMS)
   timeline.push({ type: jsPsychMmoLoader });
@@ -852,3 +885,4 @@ window.addEventListener("DOMContentLoaded", () => {
 
   jsPsych.run(timeline);
 });
+

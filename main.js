@@ -1,12 +1,7 @@
 // main.js — MathOMeter FULL (6 run x 20 trial)
 // PTB-LIKE TIMING + PTB-IDENTICAL PARAMS + PTB-IDENTICAL RUN FILE NAMING
 //
-// Struttura:
-//   1) SubjectNumber (tastiera + INVIO)
-//   2) TTL onset / start: touch ovunque OPPURE qualsiasi tasto
-//   3) Loader (JSON + preload demo)
-//   4) Trials
-//
+// Struttura: SubjectNumber -> press any key (TTLonset) -> Loader -> trials
 // Salvataggio:
 //   - params (PTB-like): mathometer_subjXX_params.json (1 volta all'inizio, opzionale anche ad ogni run)
 //   - run data:          mathometer_subjXX_run_1..6.json  (runIndex = ordine di esecuzione, come PTB runs(i))
@@ -26,12 +21,6 @@
 // Interrupt/resume (browser):
 // - lastRunCompleted viene salvato in localStorage e sovrascritto (come PTB che sovrascrive params.mat)
 // - se ricarichi e reinserisci lo stesso subjectNumber, riparte da lastRunCompleted+1
-//
-// =========================
-// ⚠️ IMPORTANT: index.html
-// =========================
-// Per far funzionare "touch anywhere" nel TTL anchor devi includere anche:
-// <script src="https://unpkg.com/@jspsych/plugin-html-button-response@1.1.3"></script>
 //
 // =========================
 // CONFIG
@@ -67,7 +56,7 @@ let MMO_RUN_QUESTIONS = null; // buffer run corrente
 // Response capture state (PTB-like "KbQueue firstPress")
 let MMO_WAIT_START_MS = null;
 let MMO_FIRST_PRESS_MS = null;
-let MMO_FIRST_KEY = null;     // può essere: "b","y","left","right"
+let MMO_FIRST_KEY = null;     // "b","y","left","right"
 let MMO_GOT_RESP = false;
 
 function newRunQuestions() {
@@ -97,18 +86,9 @@ function keyToSide(key) {
   return null;
 }
 
-/* =========================
-   ✅ TOUCH SUPPORT HELPERS
-   ========================= */
-// accetta "b","y" oppure "left","right"
-function anyToSide(x) {
-  if (x === "left" || x === "right") return x;
-  return keyToSide(x);
-}
-
 // trueSide: 1 TRUE a destra (b), 2 TRUE a sinistra (y)
-function anyToTrueFalse(x, trueSide) {
-  const side = anyToSide(x);
+function keyToTrueFalse(key, trueSide) {
+  const side = keyToSide(key);
   if (!side) return "NA";
   if (trueSide === 1) return (side === "right") ? "True" : "False";
   return (side === "left") ? "True" : "False";
@@ -116,8 +96,8 @@ function anyToTrueFalse(x, trueSide) {
 
 function mappingString(trueSide) {
   return (trueSide === 1)
-    ? "True=right(b/tap-right), False=left(y/tap-left)"
-    : "True=left(y/tap-left), False=right(b/tap-right)";
+    ? "True=right(b), False=left(y)"
+    : "True=left(y), False=right(b)";
 }
 
 // ====== DEBUG LABEL ======
@@ -234,10 +214,11 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
     saveSubjectParams(subjectNumber, saved);
   }
 
+  // 2) costruisci runs PTB-like (parametri) + trials runtime
   const runs = [];
 
   for (let i = 0; i < TOTAL_RUNS; i++) {
-    const runIndex = i + 1;        // ordine esecuzione 1..6
+    const runIndex = i + 1;        // PTB runs(i) => ordine esecuzione 1..6
     const runNumber = runOrder[i]; // run originale 1..6
 
     // sentences: select by runNumber, shuffle, take 20
@@ -274,7 +255,7 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
     const sentenceTheme = [];
     const sentenceTruth = [];
     const sentenceGender = [];
-    const animationNameIdx = [];    // 20x4 1-based indices
+    const animationNameIdx = [];    // 20x4 1-based indices (come PTB)
 
     const robotOkIdx = 4 * N_CHARACTERS + 1;    // 17
     const robotNotokIdx = 4 * N_CHARACTERS + 2; // 18
@@ -287,6 +268,7 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
       const characterId = thisRunChars[t];
       const gender = CHARACTER_GENDER[characterId];
 
+      // DEBUG: prima run eseguita, primo trial
       if (i === 0 && t === 0) {
         console.log(
           "DEBUG subj", subjectNumber,
@@ -297,9 +279,11 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
         );
       }
 
+      // sentence filename (PTB-style)
       const sentenceFileNameOnly =
         `Sentence${s.sentenceId}_${s.category}_${s.theme}_${s.truthValue}_Gender_${gender}.wav`;
 
+      // animation indices PTB-like
       const c = CHARACTER_IDS.indexOf(characterId) + 1; // 1..4
       const baseIdx = 4 * (c - 1); // 0,4,8,12
       let sentIdx1, waitIdx1;
@@ -322,11 +306,12 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
 
       animationNameIdx.push([sentIdx1, waitIdx1, robotOkIdx, robotNotokIdx]);
 
+      // runtime trial config
       const cIndex = c;
       const sentAnimName = (trueSide === 1) ? "SentenceTrueRight" : "SentenceTrueLeft";
       const waitAnimName = (trueSide === 1) ? "WaitTrueRight" : "WaitTrueLeft";
 
-      // ✅ FIX: su GitHub i file sono .MP4 (case-sensitive)
+      // ✅ CORREZIONE NOMI + CASE (come in GitHub)
       trials.push({
         runIndex,
         runNumber,
@@ -342,12 +327,13 @@ function buildParamsAndTrials_PTBlike(subjectNumber, allSentences, assoc) {
         characterId,
         gender,
 
+        // runtime paths (GitHub case-sensitive)
         audioFile: `Sentences/${sentenceFileNameOnly}`,
-animSentenceFile: `Animations/${sentAnimName}P${cIndex}.MP4`,
-animWaitFile: `Animations/${waitAnimName}P${cIndex}.MP4`,
-robotOk: `Animations/FeedbackOkRobot.MP4`,
-robotNotOk: `Animations/FeedbackNotOkRobot.MP4`,
-beep: `Sentences/beep.wav`,
+        animSentenceFile: `Animations/${sentAnimName}P${cIndex}.MP4`,
+        animWaitFile: `Animations/${waitAnimName}P${cIndex}.MP4`,
+        robotOk: `Animations/FeedbackOkRobot.MP4`,
+        robotNotOk: `Animations/FeedbackNotOkRobot.MP4`,
+        beep: `Sentences/beep.wav`,
       });
     }
 
@@ -537,14 +523,12 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
   runTimeline.push({
     type: jsPsychVideoKeyboardResponse,
     stimulus: () => [cfg.animWaitFile],
-
-    // tastiera (fallback) + touch (pointerdown)
     choices: ["b", "y"],
     response_ends_trial: false,
     trial_duration: timing.responseDuration * 1000,
 
     on_start: () => {
-      setDebugLabel("WAIT (tap left/right | keyboard: b=right, y=left)");
+      setDebugLabel("WAIT (b=right, y=left)");
     },
 
     on_load: function () {
@@ -568,29 +552,13 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
         if (k !== "b" && k !== "y") return;
         if (!MMO_GOT_RESP) {
           MMO_GOT_RESP = true;
-          MMO_FIRST_KEY = k;                 // "b" o "y"
+          MMO_FIRST_KEY = k;
           MMO_FIRST_PRESS_MS = performance.now();
         }
       };
+
       window.addEventListener("keydown", onKeyDown, { capture: true });
       this._mmo_onKeyDown = onKeyDown;
-
-      // ✅ TOUCH: tap metà schermo sinistra/destra
-      const onPointerDown = (e) => {
-        if (MMO_GOT_RESP) return;
-
-        try { e.preventDefault(); } catch {}
-        try { e.stopPropagation(); } catch {}
-
-        const x = e.clientX;
-        const side = (x < window.innerWidth / 2) ? "left" : "right";
-
-        MMO_GOT_RESP = true;
-        MMO_FIRST_KEY = side;                // "left" o "right"
-        MMO_FIRST_PRESS_MS = performance.now();
-      };
-      window.addEventListener("pointerdown", onPointerDown, { capture: true, passive: false });
-      this._mmo_onPointerDown = onPointerDown;
 
       // col3: flip-like start response period timestamp
       stampFlip((tFlipRespStart) => {
@@ -603,14 +571,10 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
       clearDebugLabel();
       const trialRow = cfg.trialIndex - 1; // freeze
 
-      // stop listeners
+      // stop "queue"
       if (this._mmo_onKeyDown) {
         window.removeEventListener("keydown", this._mmo_onKeyDown, { capture: true });
         this._mmo_onKeyDown = null;
-      }
-      if (this._mmo_onPointerDown) {
-        window.removeEventListener("pointerdown", this._mmo_onPointerDown, { capture: true });
-        this._mmo_onPointerDown = null;
       }
 
       // Response & RT PTB-like
@@ -618,7 +582,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
         MMO_RUN_QUESTIONS.response[trialRow] = "NA";
         MMO_RUN_QUESTIONS.rt[trialRow] = -1;
       } else {
-        MMO_RUN_QUESTIONS.response[trialRow] = anyToTrueFalse(MMO_FIRST_KEY, cfg.trueSide);
+        MMO_RUN_QUESTIONS.response[trialRow] = keyToTrueFalse(MMO_FIRST_KEY, cfg.trueSide);
         MMO_RUN_QUESTIONS.rt[trialRow] = relToTTL_s(MMO_FIRST_PRESS_MS);
       }
 
@@ -681,8 +645,11 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
     data: () => ({ phase: "rest", ...cfg })
   });
 
-  // === end of run ===
+  // === end of run (PTB-style: save runIndex as file name run_1..run_6) ===
   if (cfg.trialIndex === NUM_SENTENCES) {
+
+    // ✅ CORREZIONE: aggiorna anche window.MMO_PARAMS.lastRunCompleted, così il resume funziona
+    // nella *stessa sessione* (e non solo dopo reload).
     runTimeline.push({
       type: jsPsychHtmlKeyboardResponse,
       stimulus: `<div class="mmo-form"><h1>MathOMeter</h1><p>Saving run ${cfg.runIndex}...</p></div>`,
@@ -693,21 +660,25 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
         const subjStr = subjStr2(subjectNumber);
         const runOrder = window.MMO_PARAMS?.runOrder || null;
 
+        // aggiorna "params.mat" browser-side (sovrascrive come PTB)
         updateLastRunCompleted(subjectNumber, cfg.runIndex);
 
+        // ✅ aggiorna anche lo stato runtime
         if (window.MMO_PARAMS) window.MMO_PARAMS.lastRunCompleted = cfg.runIndex;
 
+        // opzionale: scarica anche un params snapshot aggiornato (non sovrascrivibile)
         if (DOWNLOAD_PARAMS_EACH_RUN) {
           const p = loadSubjectParams(subjectNumber);
           downloadJSON(`mathometer_subj${subjStr}_params_after_run_${cfg.runIndex}.json`, p || {});
         }
 
+        // aspetta 2 frame: lascia completare stampFlip del REST (col6)
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
             downloadJSON(`mathometer_subj${subjStr}_run_${cfg.runIndex}.json`, {
               subjectNumber,
-              runIndex: cfg.runIndex,
-              runNumber: cfg.runNumber,
+              runIndex: cfg.runIndex,     // ordine esecuzione (PTB runs(i))
+              runNumber: cfg.runNumber,   // run originale (run_order(i))
               runOrder,
               trueSide: cfg.trueSide,
               mapping: mappingString(cfg.trueSide),
@@ -721,6 +692,7 @@ function addOneTrialBlock(runTimeline, cfg, jsPsych) {
       }
     });
 
+    // Break screen: PTB-style (next run) in ordine di esecuzione
     const isLastRun = (cfg.runIndex === TOTAL_RUNS);
     if (!isLastRun) {
       runTimeline.push({
@@ -747,7 +719,7 @@ window.addEventListener("DOMContentLoaded", () => {
 
   const timeline = [];
 
-  // 1) Subject number: tastiera + INVIO
+  // Subject NUMBER (01,02,... ok)
   let MMO_subjectNumberStr = "";
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
@@ -781,53 +753,26 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // 2) TTL anchor: touch ovunque OPPURE qualsiasi tasto
+  // TTL anchor
   timeline.push({
-    type: jsPsychHtmlButtonResponse,
+    type: jsPsychHtmlKeyboardResponse,
     stimulus: `
       <div class="mmo-form">
         <h1>MathOMeter</h1>
-        <p>Tocca lo schermo per cominciare</p>
-        <p style="font-size:14px; opacity:0.8;">(oppure premi un tasto)</p>
+        <p>Premi un qualunque tasto per cominciare</p>
       </div>
     `,
-    choices: [" "],
-    button_html: `
-      <button style="
-        position:fixed; inset:0;
-        width:100vw; height:100vh;
-        opacity:0; border:0; padding:0; margin:0;
-        background:transparent;
-        cursor:pointer;
-      " aria-label="Start"></button>
-    `,
-    data: { phase: "press_any_key_or_touch" },
-
-    on_load: function () {
-      const onKeyDown = (e) => {
-        try { e.preventDefault(); } catch {}
-        try { e.stopPropagation(); } catch {}
-        jsPsych.finishTrial({ started_by: "keyboard" });
-      };
-      window.addEventListener("keydown", onKeyDown, { capture: true });
-      this._mmo_start_onKeyDown = onKeyDown;
-    },
-
-    on_finish: function (data) {
-      if (this._mmo_start_onKeyDown) {
-        window.removeEventListener("keydown", this._mmo_start_onKeyDown, { capture: true });
-        this._mmo_start_onKeyDown = null;
-      }
-
+    choices: "ALL_KEYS",
+    data: { phase: "press_any_key" },
+    on_finish: () => {
       if (MMO_TTL_T0_MS == null) MMO_TTL_T0_MS = performance.now();
-      if (!data.started_by) data.started_by = "touch";
     }
   });
 
-  // 3) Loader
+  // Loader (costruisce params+runs e li mette in window.MMO_PARAMS)
   timeline.push({ type: jsPsychMmoLoader });
 
-  // 4) Resume
+  // ✅ SCHERMATA RESUME/START (come PTB "currentRun"): mostra da quale run riparti
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: () => {
@@ -866,7 +811,7 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // Fixation pre-beep
+  // Fixation pre-beep (solo una volta, come PTB pre-trial onset)
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: fixationHTML(),
@@ -877,7 +822,7 @@ window.addEventListener("DOMContentLoaded", () => {
     data: { phase: "fixation_pre_beep" }
   });
 
-  // Build run timeline dinamicamente (resume)
+  // DIRECT build without "preparing trials..."
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: fixationHTML(),
@@ -887,13 +832,14 @@ window.addEventListener("DOMContentLoaded", () => {
       const params = window.MMO_PARAMS;
       if (!params) throw new Error("MMO_PARAMS non trovato: loader non ha caricato i parametri.");
 
+      // riparti da lastRunCompleted+1 (resume)
       const startRunIndex = Math.min(Math.max((params.lastRunCompleted || 0) + 1, 1), TOTAL_RUNS);
 
       const runTimeline = [];
 
       for (let r = 0; r < params.runs.length; r++) {
         const run = params.runs[r];
-        if (run.runIndex < startRunIndex) continue;
+        if (run.runIndex < startRunIndex) continue; // skip runs già completate
 
         for (let t = 0; t < run.trials.length; t++) {
           addOneTrialBlock(runTimeline, run.trials[t], jsPsych);
@@ -906,5 +852,3 @@ window.addEventListener("DOMContentLoaded", () => {
 
   jsPsych.run(timeline);
 });
-
-

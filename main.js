@@ -3,8 +3,8 @@
 //
 // Structure (as requested):
 //   1) SubjectNumber (keyboard + ENTER)
+//   2b) ✅ If subject already completed all runs (localStorage): show message + auto return (BEFORE loader)
 //   2) Loader (JSON + preload demo)
-//   2b) ✅ If subject already completed all runs: show message + auto return to subject entry
 //   3) Screen “Sujet/Run” (tap anywhere OR any key)   ✅ (confirmation)
 //   4) Screen “Prêt” (tap anywhere OR any key)        ✅ TTL anchor = HERE (per-run)
 //   5) Trials
@@ -847,17 +847,14 @@ window.addEventListener("DOMContentLoaded", () => {
     }
   });
 
-  // 2) Loader (JSON + preload demo)
-  timeline.push({ type: jsPsychMmoLoader });
-
-  // ✅ 2b) If completed: show message + auto return to subject entry
+  // ✅ 2b) If completed (localStorage): show message + auto return to subject entry (BEFORE loader)
   timeline.push({
     type: jsPsychHtmlKeyboardResponse,
     stimulus: () => {
-      const params = window.MMO_PARAMS;
       const subjectNumber = window.MMO_SUBJECT_NUMBER;
+      const saved = loadSubjectParams(subjectNumber);
 
-      if (!params || Number(params.lastRunCompleted || 0) < TOTAL_RUNS) return "";
+      if (!saved || Number(saved.lastRunCompleted || 0) < TOTAL_RUNS) return "";
 
       return `
         <div class="mmo-form">
@@ -871,16 +868,21 @@ window.addEventListener("DOMContentLoaded", () => {
     },
     choices: "NO_KEYS",
     trial_duration: () => {
-      const params = window.MMO_PARAMS;
-      return (params && Number(params.lastRunCompleted || 0) >= TOTAL_RUNS) ? 2000 : 0;
+      const subjectNumber = window.MMO_SUBJECT_NUMBER;
+      const saved = loadSubjectParams(subjectNumber);
+      return (saved && Number(saved.lastRunCompleted || 0) >= TOTAL_RUNS) ? 2000 : 0;
     },
     on_finish: () => {
-      const params = window.MMO_PARAMS;
-      if (params && Number(params.lastRunCompleted || 0) >= TOTAL_RUNS) {
+      const subjectNumber = window.MMO_SUBJECT_NUMBER;
+      const saved = loadSubjectParams(subjectNumber);
+      if (saved && Number(saved.lastRunCompleted || 0) >= TOTAL_RUNS) {
         location.reload();
       }
     }
   });
+
+  // 2) Loader (JSON + preload demo)
+  timeline.push({ type: jsPsychMmoLoader });
 
   // 3) Build everything dynamically:
   //    (run confirm+ready)->trials->(next run confirm+ready)->...
@@ -896,7 +898,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const last = Number(params.lastRunCompleted || 0);
       const startRunIndex = Math.min(Math.max(last + 1, 1), TOTAL_RUNS);
 
-      // (Redundant safety guard; normally won't be reached because of the auto-return above)
+      // safety guard (normally the 2b block already prevented this)
       if (last >= TOTAL_RUNS) {
         jsPsych.endExperiment("Toutes les runs sont terminées.");
         return;
@@ -965,3 +967,4 @@ window.addEventListener("DOMContentLoaded", () => {
 
   jsPsych.run(timeline);
 });
+

@@ -4,6 +4,7 @@
 // Structure (as requested):
 //   1) SubjectNumber (keyboard + ENTER)
 //   2) Loader (JSON + preload demo)
+//   2b) ✅ If subject already completed all runs: show message + auto return to subject entry
 //   3) Screen “Sujet/Run” (tap anywhere OR any key)   ✅ (confirmation)
 //   4) Screen “Prêt” (tap anywhere OR any key)        ✅ TTL anchor = HERE (per-run)
 //   5) Trials
@@ -849,6 +850,38 @@ window.addEventListener("DOMContentLoaded", () => {
   // 2) Loader (JSON + preload demo)
   timeline.push({ type: jsPsychMmoLoader });
 
+  // ✅ 2b) If completed: show message + auto return to subject entry
+  timeline.push({
+    type: jsPsychHtmlKeyboardResponse,
+    stimulus: () => {
+      const params = window.MMO_PARAMS;
+      const subjectNumber = window.MMO_SUBJECT_NUMBER;
+
+      if (!params || Number(params.lastRunCompleted || 0) < TOTAL_RUNS) return "";
+
+      return `
+        <div class="mmo-form">
+          <h1>Information</h1>
+          <p>Le sujet <b>${subjStr2(subjectNumber)}</b> a déjà complété toutes les runs.</p>
+          <p style="margin-top:16px; opacity:0.85;">
+            Retour à la saisie du numéro de sujet…
+          </p>
+        </div>
+      `;
+    },
+    choices: "NO_KEYS",
+    trial_duration: () => {
+      const params = window.MMO_PARAMS;
+      return (params && Number(params.lastRunCompleted || 0) >= TOTAL_RUNS) ? 2000 : 0;
+    },
+    on_finish: () => {
+      const params = window.MMO_PARAMS;
+      if (params && Number(params.lastRunCompleted || 0) >= TOTAL_RUNS) {
+        location.reload();
+      }
+    }
+  });
+
   // 3) Build everything dynamically:
   //    (run confirm+ready)->trials->(next run confirm+ready)->...
   timeline.push({
@@ -863,6 +896,7 @@ window.addEventListener("DOMContentLoaded", () => {
       const last = Number(params.lastRunCompleted || 0);
       const startRunIndex = Math.min(Math.max(last + 1, 1), TOTAL_RUNS);
 
+      // (Redundant safety guard; normally won't be reached because of the auto-return above)
       if (last >= TOTAL_RUNS) {
         jsPsych.endExperiment("Toutes les runs sont terminées.");
         return;
